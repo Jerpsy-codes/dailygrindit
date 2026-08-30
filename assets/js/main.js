@@ -418,6 +418,108 @@ if (trainingForm && formStatus) {
   });
 }
 
+const programCarousel = document.querySelector("[data-program-carousel]");
+
+if (programCarousel) {
+  const programViewport = programCarousel.querySelector("[data-program-viewport]");
+  const programSlides = Array.from(programCarousel.querySelectorAll("[data-program-slide]"));
+  const programDots = Array.from(programCarousel.querySelectorAll("[data-program-dot]"));
+  const programPreviousButton = programCarousel.querySelector("[data-program-previous]");
+  const programNextButton = programCarousel.querySelector("[data-program-next]");
+  const programCounter = programCarousel.querySelector("[data-program-counter]");
+  let activeProgramIndex = Math.max(0, programSlides.findIndex((slide) => slide.classList.contains("is-active")));
+  let swipeStart = null;
+  let suppressClickUntil = 0;
+
+  const showProgramSlide = (requestedIndex) => {
+    if (!programSlides.length) return;
+
+    activeProgramIndex = (requestedIndex + programSlides.length) % programSlides.length;
+
+    programSlides.forEach((slide, index) => {
+      const isActive = index === activeProgramIndex;
+      slide.hidden = !isActive;
+      slide.setAttribute("aria-hidden", String(!isActive));
+      slide.classList.toggle("is-active", isActive);
+    });
+
+    programDots.forEach((dot, index) => {
+      const isActive = index === activeProgramIndex;
+      dot.classList.toggle("is-active", isActive);
+      dot.setAttribute("aria-current", String(isActive));
+    });
+
+    if (programCounter) {
+      programCounter.textContent = `${activeProgramIndex + 1} / ${programSlides.length}`;
+    }
+  };
+
+  programPreviousButton?.addEventListener("click", () => showProgramSlide(activeProgramIndex - 1));
+  programNextButton?.addEventListener("click", () => showProgramSlide(activeProgramIndex + 1));
+
+  programDots.forEach((dot, index) => {
+    dot.addEventListener("click", () => showProgramSlide(index));
+  });
+
+  programCarousel.addEventListener("keydown", (event) => {
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+
+    if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      showProgramSlide(activeProgramIndex - 1);
+    } else if (event.key === "ArrowRight") {
+      event.preventDefault();
+      showProgramSlide(activeProgramIndex + 1);
+    }
+  });
+
+  if (programViewport) {
+    programViewport.addEventListener("pointerdown", (event) => {
+      if (!event.isPrimary || event.button !== 0) return;
+
+      swipeStart = {
+        pointerId: event.pointerId,
+        x: event.clientX,
+        y: event.clientY
+      };
+    });
+
+    programViewport.addEventListener(
+      "click",
+      (event) => {
+        if (Date.now() >= suppressClickUntil) return;
+
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      },
+      true
+    );
+
+    window.addEventListener("pointerup", (event) => {
+      if (!swipeStart || event.pointerId !== swipeStart.pointerId) return;
+
+      const horizontalDistance = event.clientX - swipeStart.x;
+      const verticalDistance = event.clientY - swipeStart.y;
+      const isHorizontalSwipe =
+        Math.abs(horizontalDistance) >= 48 &&
+        Math.abs(horizontalDistance) > Math.abs(verticalDistance) * 1.25;
+
+      swipeStart = null;
+
+      if (!isHorizontalSwipe) return;
+
+      suppressClickUntil = Date.now() + 350;
+      showProgramSlide(activeProgramIndex + (horizontalDistance < 0 ? 1 : -1));
+    });
+
+    window.addEventListener("pointercancel", () => {
+      swipeStart = null;
+    });
+  }
+
+  showProgramSlide(activeProgramIndex);
+}
+
 const soloModal = document.querySelector("#solo-training-booking");
 const soloOpenButtons = document.querySelectorAll("[data-solo-training-open]");
 
@@ -429,8 +531,27 @@ if (soloModal && soloOpenButtons.length) {
   const proofFileName = soloModal.querySelector("[data-proof-filename]");
   const proofPreview = soloModal.querySelector("[data-proof-preview]");
   const proofError = soloModal.querySelector("[data-proof-error]");
+  const rulesAgreement = soloModal.querySelector("[data-rules-agreement]");
+  const rulesError = soloModal.querySelector("[data-rules-error]");
   const soloStatus = soloModal.querySelector("[data-solo-status]");
   const soloSubmitButton = soloForm ? soloForm.querySelector('button[type="submit"]') : null;
+  const trainingTypeInputs = Array.from(soloModal.querySelectorAll("[data-training-type]"));
+  const trainingOptionCards = Array.from(soloModal.querySelectorAll(".training-option-card"));
+  const trainingProgramImage = soloModal.querySelector("[data-training-program-image]");
+  const trainingImageButton = soloModal.querySelector("[data-training-image-open]");
+  const trainingPreviousButton = soloModal.querySelector("[data-training-prev]");
+  const trainingNextButton = soloModal.querySelector("[data-training-next]");
+  const trainingDots = Array.from(soloModal.querySelectorAll("[data-training-slide]"));
+  const trainingCounter = soloModal.querySelector("[data-training-counter]");
+  const trainingNav = soloModal.querySelector("[data-training-nav]");
+  const trainingNote = soloModal.querySelector("[data-training-note]");
+  const trainingSummary = soloModal.querySelector("[data-training-summary]");
+  const trainingPrice = soloModal.querySelector("[data-training-price]");
+  const trainingInclusions = soloModal.querySelector("[data-training-inclusions]");
+  const bookingTypeField = soloModal.querySelector("[data-booking-type]");
+  const packagePriceField = soloModal.querySelector("[data-package-price]");
+  const packageDetailsField = soloModal.querySelector("[data-package-details]");
+  const galleryLightbox = document.querySelector("#galleryLightbox");
   const focusableSelector = [
     'a[href]',
     'button:not([disabled])',
@@ -442,9 +563,71 @@ if (soloModal && soloOpenButtons.length) {
   const allowedProofTypes = ["image/jpeg", "image/png", "image/webp"];
   const allowedProofExtension = /\.(jpe?g|png|webp)$/i;
   const maxProofSize = 7 * 1024 * 1024;
+  const rulesAgreementMessage = "Please read and agree to the Daily Grind Individual Training Rules and Regulations before submitting your request.";
+  const trainingTypeMessage = "Please select a DGIT training program before submitting.";
+  const trainingPrograms = {
+    "Solo Training": {
+      note: "Solo Training is a one-on-one session with the coach.",
+      priceDisplay: "₱15,000 per student",
+      priceSubmission: "PHP 15,000 per student",
+      detailsDisplay: "10 sessions · Court fee: ₱150 per session · Free DGIT Merchandise (1 only)",
+      detailsSubmission: "10 sessions; Court fee: PHP 150 per session; Free DGIT Merchandise (1 only)",
+      images: [
+        {
+          src: "assets/images/solo_trainingprogram1.1.jfif",
+          alt: "Solo Training program overview and inclusions"
+        },
+        {
+          src: "assets/images/solo_trainingprogram1.1.2.jfif",
+          alt: "Solo Training program details, pricing, court fee, and bonus"
+        }
+      ]
+    },
+    "Duo Training": {
+      note: "Duo Training is designed for two athletes training together in the same personalized session.",
+      priceDisplay: "₱12,000 per student",
+      priceSubmission: "PHP 12,000 per student",
+      detailsDisplay: "10 sessions · Court fee included · Free DGIT Wear merch",
+      detailsSubmission: "10 sessions; Court fee included; Free DGIT Wear merch",
+      images: [
+        {
+          src: "assets/images/dgit_duotraining.jfif",
+          alt: "DGIT Duo Basketball Training program"
+        }
+      ]
+    },
+    "Trio Training": {
+      note: "Trio Training is designed for three athletes developing their skills together in the same training session.",
+      priceDisplay: "₱10,500 per student",
+      priceSubmission: "PHP 10,500 per student",
+      detailsDisplay: "10 sessions · Court fee included · Free DGIT Wear merch",
+      detailsSubmission: "10 sessions; Court fee included; Free DGIT Wear merch",
+      images: [
+        {
+          src: "assets/images/dgit_triotraining.jfif",
+          alt: "DGIT Trio Basketball Training program"
+        }
+      ]
+    },
+    "Small Group Training": {
+      note: "Small Group Training is designed for 4–6 athletes while still addressing each player's individual development needs.",
+      priceDisplay: "₱9,500 per student",
+      priceSubmission: "PHP 9,500 per student",
+      detailsDisplay: "10 sessions · Court fee included · Free DGIT Wear merch",
+      detailsSubmission: "10 sessions; Court fee included; Free DGIT Wear merch",
+      images: [
+        {
+          src: "assets/images/dgit_smallgroup.jfif",
+          alt: "DGIT Small Group Basketball Training program"
+        }
+      ]
+    }
+  };
 
   let lastSoloTrigger = null;
   let proofPreviewUrl = "";
+  let selectedTrainingType = "Solo Training";
+  let trainingImageIndex = 0;
 
   const getSoloFocusable = () => {
     if (!soloPanel) return [];
@@ -519,6 +702,137 @@ if (soloModal && soloOpenButtons.length) {
     return true;
   };
 
+  const syncRulesAgreementValidity = (options = {}) => {
+    if (!rulesAgreement) return true;
+
+    const isAgreed = rulesAgreement.checked;
+    const message = isAgreed ? "" : rulesAgreementMessage;
+
+    rulesAgreement.setCustomValidity(message);
+
+    if (rulesError) {
+      rulesError.textContent = options.showError && !isAgreed ? message : "";
+    }
+
+    return isAgreed;
+  };
+
+  const updateTrainingProgramImages = () => {
+    const images = trainingPrograms[selectedTrainingType]?.images || [];
+    const activeImage = images[trainingImageIndex];
+
+    if (!activeImage) return;
+
+    if (trainingProgramImage) {
+      trainingProgramImage.src = activeImage.src;
+      trainingProgramImage.alt = activeImage.alt;
+    }
+
+    if (trainingImageButton) {
+      trainingImageButton.setAttribute("aria-label", `View ${activeImage.alt} full size`);
+    }
+
+    if (trainingCounter) {
+      trainingCounter.textContent = `${trainingImageIndex + 1} / ${images.length}`;
+    }
+
+    if (trainingNav) {
+      trainingNav.hidden = images.length <= 1;
+    }
+
+    trainingDots.forEach((dot, index) => {
+      const isAvailable = index < images.length;
+      const isActive = index === trainingImageIndex;
+      dot.hidden = !isAvailable;
+      dot.classList.toggle("is-active", isActive);
+      dot.setAttribute("aria-current", String(isActive));
+      dot.setAttribute("aria-label", `Show ${selectedTrainingType} image ${index + 1}`);
+    });
+  };
+
+  const updateTrainingSummary = () => {
+    const program = trainingPrograms[selectedTrainingType];
+
+    if (!program) return;
+
+    if (trainingNote) {
+      trainingNote.textContent = program.note;
+    }
+
+    if (trainingSummary) {
+      trainingSummary.textContent = selectedTrainingType;
+    }
+
+    if (trainingPrice) {
+      trainingPrice.textContent = program.priceDisplay;
+    }
+
+    if (trainingInclusions) {
+      trainingInclusions.textContent = program.detailsDisplay;
+    }
+
+    if (bookingTypeField) {
+      bookingTypeField.value = selectedTrainingType;
+    }
+
+    if (packagePriceField) {
+      packagePriceField.value = program.priceSubmission;
+    }
+
+    if (packageDetailsField) {
+      packageDetailsField.value = program.detailsSubmission;
+    }
+
+    if (soloSubmitButton) {
+      const submitLabel = `Submit ${selectedTrainingType} Request`;
+      soloSubmitButton.dataset.submitLabel = submitLabel;
+
+      if (soloForm?.dataset.submitting !== "true") {
+        soloSubmitButton.textContent = submitLabel;
+      }
+    }
+  };
+
+  const setTrainingType = (trainingType) => {
+    if (!trainingPrograms[trainingType]) return;
+
+    selectedTrainingType = trainingType;
+    trainingImageIndex = 0;
+
+    trainingTypeInputs.forEach((input) => {
+      input.checked = input.value === selectedTrainingType;
+      input.setCustomValidity("");
+    });
+
+    trainingOptionCards.forEach((card) => {
+      const input = card.querySelector("[data-training-type]");
+      card.classList.toggle("is-selected", Boolean(input && input.checked));
+    });
+
+    updateTrainingProgramImages();
+    updateTrainingSummary();
+  };
+
+  const syncTrainingTypeValidity = () => {
+    const selectedInput = trainingTypeInputs.find((input) => input.checked);
+    const isValid = Boolean(selectedInput && trainingPrograms[selectedInput.value]);
+
+    trainingTypeInputs.forEach((input, index) => {
+      input.setCustomValidity(!isValid && index === 0 ? trainingTypeMessage : "");
+    });
+
+    return isValid;
+  };
+
+  const showTrainingImage = (index) => {
+    const images = trainingPrograms[selectedTrainingType]?.images || [];
+
+    if (!images.length) return;
+
+    trainingImageIndex = (index + images.length) % images.length;
+    updateTrainingProgramImages();
+  };
+
   const closeSoloModal = () => {
     if (soloModal.hidden) return;
 
@@ -536,6 +850,8 @@ if (soloModal && soloOpenButtons.length) {
   };
 
   function handleSoloKeydown(event) {
+    if (galleryLightbox && galleryLightbox.open) return;
+
     if (event.key === "Escape") {
       closeSoloModal();
       return;
@@ -576,6 +892,12 @@ if (soloModal && soloOpenButtons.length) {
 
   const openSoloModal = (trigger) => {
     lastSoloTrigger = trigger || document.activeElement;
+
+    const intendedTrainingType = trigger?.dataset.trainingTypeIntent;
+    if (intendedTrainingType) {
+      setTrainingType(intendedTrainingType);
+    }
+
     soloModal.hidden = false;
     document.body.classList.add("solo-modal-open");
     document.addEventListener("keydown", handleSoloKeydown);
@@ -614,6 +936,59 @@ if (soloModal && soloOpenButtons.length) {
     window.setTimeout(() => openSoloModal(), 0);
   }
 
+  if (trainingTypeInputs.length) {
+    const initiallySelectedType = trainingTypeInputs.find((input) => input.checked)?.value || "Solo Training";
+    setTrainingType(initiallySelectedType);
+
+    trainingTypeInputs.forEach((input) => {
+      input.addEventListener("change", () => {
+        if (input.checked) {
+          setTrainingType(input.value);
+          if (soloStatus) {
+            soloStatus.textContent = "";
+          }
+        }
+      });
+
+      input.addEventListener("invalid", () => {
+        syncTrainingTypeValidity();
+        if (soloStatus) {
+          soloStatus.textContent = trainingTypeMessage;
+        }
+      });
+    });
+  }
+
+  if (trainingPreviousButton) {
+    trainingPreviousButton.addEventListener("click", () => showTrainingImage(trainingImageIndex - 1));
+  }
+
+  if (trainingNextButton) {
+    trainingNextButton.addEventListener("click", () => showTrainingImage(trainingImageIndex + 1));
+  }
+
+  trainingDots.forEach((dot) => {
+    dot.addEventListener("click", () => showTrainingImage(Number(dot.dataset.trainingSlide)));
+  });
+
+  if (trainingImageButton && galleryLightbox) {
+    trainingImageButton.addEventListener("click", () => {
+      const lightboxImage = galleryLightbox.querySelector("img");
+      const lightboxCaption = galleryLightbox.querySelector("p");
+
+      if (lightboxImage && trainingProgramImage) {
+        lightboxImage.src = trainingProgramImage.currentSrc || trainingProgramImage.src;
+        lightboxImage.alt = trainingProgramImage.alt;
+      }
+
+      if (lightboxCaption && trainingProgramImage) {
+        lightboxCaption.textContent = trainingProgramImage.alt;
+      }
+
+      galleryLightbox.showModal();
+    });
+  }
+
   if (proofInput) {
     proofInput.addEventListener("change", () => {
       validateProofFile();
@@ -623,21 +998,45 @@ if (soloModal && soloOpenButtons.length) {
     });
   }
 
+  if (rulesAgreement) {
+    syncRulesAgreementValidity();
+
+    rulesAgreement.addEventListener("change", () => {
+      syncRulesAgreementValidity();
+      if (soloStatus) {
+        soloStatus.textContent = "";
+      }
+    });
+
+    rulesAgreement.addEventListener("invalid", () => {
+      syncRulesAgreementValidity({ showError: true });
+      if (soloStatus) {
+        soloStatus.textContent = rulesAgreementMessage;
+      }
+    });
+  }
+
   if (soloForm) {
     soloForm.addEventListener("submit", (event) => {
+      const trainingTypeIsValid = syncTrainingTypeValidity();
       const proofIsValid = validateProofFile();
+      const rulesAreValid = syncRulesAgreementValidity({ showError: true });
 
       if (soloForm.dataset.submitting === "true") {
         event.preventDefault();
         return;
       }
 
-      if (!proofIsValid || !soloForm.checkValidity()) {
+      if (!trainingTypeIsValid || !proofIsValid || !rulesAreValid || !soloForm.checkValidity()) {
         event.preventDefault();
         if (soloStatus) {
-          soloStatus.textContent = proofIsValid
-            ? "Please complete the required details first."
-            : "Please choose a valid proof of payment image.";
+          soloStatus.textContent = !trainingTypeIsValid
+            ? trainingTypeMessage
+            : !proofIsValid
+              ? "Please choose a valid proof of payment image."
+              : !rulesAreValid
+                ? rulesAgreementMessage
+                : "Please complete the required details first.";
         }
         soloForm.reportValidity();
         return;
@@ -647,11 +1046,11 @@ if (soloModal && soloOpenButtons.length) {
 
       if (soloSubmitButton) {
         soloSubmitButton.disabled = true;
-        soloSubmitButton.textContent = "Submitting Request…";
+        soloSubmitButton.textContent = "Submitting Request\u2026";
       }
 
       if (soloStatus) {
-        soloStatus.textContent = "Submitting Request…";
+        soloStatus.textContent = "Submitting Request\u2026";
       }
     });
 
@@ -660,7 +1059,7 @@ if (soloModal && soloOpenButtons.length) {
 
       if (soloSubmitButton) {
         soloSubmitButton.disabled = false;
-        soloSubmitButton.textContent = soloSubmitButton.dataset.submitLabel || "Submit Solo Training Request";
+        soloSubmitButton.textContent = soloSubmitButton.dataset.submitLabel || "Submit Training Request";
       }
     });
   }
@@ -673,11 +1072,15 @@ if (lightbox) {
   const lightboxCaption = lightbox.querySelector("p");
   const closeButton = lightbox.querySelector("button");
 
-  document.querySelectorAll("[data-lightbox]").forEach((image) => {
-    image.addEventListener("click", () => {
-      lightboxImage.src = image.currentSrc || image.src;
-      lightboxImage.alt = image.alt;
-      lightboxCaption.textContent = image.dataset.caption || image.alt;
+  document.querySelectorAll("[data-lightbox]").forEach((trigger) => {
+    trigger.addEventListener("click", () => {
+      const sourceImage = trigger.matches("img") ? trigger : trigger.querySelector("img");
+
+      if (!sourceImage) return;
+
+      lightboxImage.src = sourceImage.currentSrc || sourceImage.src;
+      lightboxImage.alt = sourceImage.alt;
+      lightboxCaption.textContent = trigger.dataset.caption || sourceImage.dataset.caption || sourceImage.alt;
       lightbox.showModal();
     });
   });
