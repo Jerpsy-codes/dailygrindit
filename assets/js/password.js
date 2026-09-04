@@ -74,6 +74,10 @@ const levelPlayerNames = {
     "Lee Kyle Sulana",
     "Enlil David D. Canton",
     "Didier Punay Corres",
+    "Aiden Rei P. Regudo",
+    "Jay Clifford Torremucha",
+    "Ezekiel John Jalbuna",
+    
   ],
   4: [
     "Jhonas Anthony Enoy",
