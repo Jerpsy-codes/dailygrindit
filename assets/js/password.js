@@ -61,6 +61,16 @@ const levelPlayerNames = {
     "Zack Kyrie Ceniza",
     "John Clouie Carampil",
     "Rio Ethan Orioque",
+    "Jason Cidrick Go",
+    "Chris Anthony Espia",
+    "James Ivan Lenteria",
+    "Arvey Rosalada",
+    "Ethan Palahang",
+    "Chase Kyler Ng",
+    "Jury Deo Mangubat",
+    "Gian Aguialar",
+    "Jsander Del Arco",
+
   ],
   3: [
     "Prince Ivan M. Catiis",
