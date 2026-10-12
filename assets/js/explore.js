@@ -60,18 +60,17 @@
     Object.assign(document.body.style, bodyStyle);
     window.scrollTo({top: scrollY, behavior: 'instant'});
   }
-  function close(book = false) {
+  function close(book = false, packageId) {
     if (closing) return;
     closing = true;
     dialog.classList.add('is-leaving');
     window.setTimeout(() => {
+      packageObserver?.disconnect();
       dialog.close();
       unlock();
       trigger.focus({preventScroll: true});
       if (book) {
-        // Use the original carousel trigger and its existing booking listener, unchanged.
-        const original = trigger.closest('[data-program-slide]').querySelector('[data-solo-training-open]');
-        original.click();
+        window.DGITBooking.open(trigger, activeProgram.name, packageId);
       }
       closing = false;
     }, reduced.matches ? 0 : 160);
@@ -81,6 +80,7 @@
     activeProgram = programs[button.dataset.explore];
     const p = activeProgram;
     dialog.dataset.program = button.dataset.explore;
+    delete dialog.dataset.view;
     dialog.classList.remove('is-leaving');
     dialog.innerHTML = `
       <div class="explore__shell">
@@ -104,6 +104,7 @@
     dialog.showModal();
     dialog.querySelector('.explore__close').focus({preventScroll:true});
     dialog.querySelector('.explore__close').onclick = () => close();
+    if (button.dataset.explore === 'solo') { renderSoloPackages(); return; }
     dialog.querySelector('.explore__book').onclick = () => close(true);
     dialog.querySelector('.explore__discover').onclick = event => {
       event.preventDefault();
@@ -116,6 +117,90 @@
       viewer.querySelector('p').textContent = img.alt;
       viewer.showModal();
     };
+  }
+  const packages = window.DGITSoloPackages;
+  const money = value => `₱${value.toLocaleString('en-PH')}`;
+  let packageObserver;
+  function soloHero(title, eyebrow, intro) {
+    return `<section class="explore__hero solo-hero">
+      <img class="explore__photo" src="assets/images/dsc05365.jpeg" alt="Coach Tom guiding individual basketball skill work" decoding="async">
+      <div class="explore__lighting" aria-hidden="true"></div><div class="explore__court" aria-hidden="true"></div>
+      <div class="explore__hero-copy"><p class="explore__eyebrow">${eyebrow}</p><h2 id="explore-title" tabindex="-1">${title}</h2><p class="explore__intro">${intro}</p></div>
+    </section>`;
+  }
+  function renderSoloPackages(focusId) {
+    packageObserver?.disconnect();
+    const scroll = dialog.querySelector('.explore__scroll');
+    dialog.dataset.view = 'packages';
+    scroll.innerHTML = `<section class="explore__hero solo-entry-hero">
+      <img class="explore__photo" src="assets/images/dsc05365.jpeg" alt="Coach Tom guiding an athlete through individual ball-handling work" decoding="async">
+      <div class="explore__lighting" aria-hidden="true"></div>
+      <div class="solo-entry-hero__copy"><p class="explore__eyebrow">DGIT SOLO TRAINING SYSTEM</p>
+      <h2 id="explore-title">${programs.solo.headline}</h2>
+      <p class="explore__intro">${programs.solo.intro}</p>
+      <div class="solo-entry-hero__actions">
+        <a href="#solo-package-options" class="explore__discover solo-entry-hero__scroll">GET INTO THE WORK <span aria-hidden="true">↓</span></a>
+        <button type="button" class="explore__book" data-solo-hero-book>BOOK SOLO TRAINING NOW!</button>
+      </div></div>
+      </section>` +
+      `<section id="solo-package-options" class="solo-packages explore__section" aria-label="Available Solo training packages">
+        ${Object.values(packages).map((p,i) => `<article class="solo-package">
+          <p class="explore__eyebrow">0${i+1} / ${p.sessions === 1 ? '1 Session' : p.label}</p>
+          <h3>${p.name}</h3>${p.id === 'solo_10' ? '<p class="solo-package__subtitle">Individualized Basketball Development</p>' : ''}
+          <p class="solo-package__position">${p.position}</p>
+          <div class="solo-package__price"><strong>${money(p.price)}</strong><span>Court fee included</span>${p.perSession ? `<small>${money(p.perSession)} per session</small>` : '<small>One session</small>'}</div>
+          <button type="button" class="explore__book" data-solo-explore="${p.id}">${p.exploreLabel} <span aria-hidden="true">↗</span></button>
+        </article>`).join('')}
+      </section>
+      <section class="explore__finish explore__section" aria-label="Book Solo Training">
+        <button type="button" class="explore__book" data-solo-bottom-book>BOOK SOLO TRAINING NOW!</button>
+      </section>`;
+    scroll.scrollTop = 0;
+    scroll.querySelectorAll('[data-solo-hero-book], [data-solo-bottom-book]').forEach(button => {
+      button.onclick = () => close(true, window.DGITBooking.selectedSoloPackage);
+    });
+    scroll.querySelector('.solo-entry-hero__scroll').onclick = event => {
+      event.preventDefault();
+      scroll.querySelector('#solo-package-options').scrollIntoView({behavior: reduced.matches ? 'instant' : 'smooth', block:'start'});
+    };
+    scroll.querySelectorAll('[data-solo-explore]').forEach(button => button.onclick = () => renderSoloDetail(button.dataset.soloExplore));
+    if (focusId) {
+      scroll.querySelector('#solo-package-options').scrollIntoView({block:'start'});
+      scroll.querySelector(`[data-solo-explore="${focusId}"]`).focus({preventScroll:true});
+    }
+  }
+  function renderSoloDetail(id) {
+    const p = packages[id];
+    if (!p) return;
+    window.DGITBooking.selectSoloPackage(id);
+    packageObserver?.disconnect();
+    const scroll = dialog.querySelector('.explore__scroll');
+    dialog.dataset.view = id;
+    scroll.innerHTML = `<div class="solo-back"><button type="button" data-packages-back>← Back to Packages</button><span>${p.label} · ${money(p.price)}</span></div>` +
+      soloHero(p.headline, p.name, p.subtitle) + `
+      <section class="solo-story explore__section"><p class="explore__eyebrow">${p.label} / Court fee included</p><h3>${p.position}</h3><div class="solo-story__copy">${p.story.map(t=>`<p>${t}</p>`).join('')}</div></section>
+      <section class="solo-inclusions explore__section"><p class="explore__eyebrow">Inside the session</p><h3>What’s included</h3><dl>${p.included.map(([t,c],i)=>`<div><dt><span>0${i+1}</span>${t}</dt><dd>${c}</dd></div>`).join('')}</dl></section>
+      ${p.phases ? `<section class="solo-framework explore__section"><p class="explore__eyebrow">The DGIT Development Framework</p><h3>Five phases.<br>A clear progression.</h3><p>Each phase builds on the previous one, from a strong foundation to effective execution in real-game situations.</p><ol>${p.phases.map(([t,c],i)=>`<li><span aria-hidden="true">0${i+1}</span><div><h4>${t}</h4><p>${c}</p></div></li>`).join('')}</ol></section>
+      <section class="solo-more explore__section"><p class="explore__eyebrow">More than Solo Training</p><h3>Keep your development going.</h3><p>Your development doesn’t stop with your 10 sessions. Ask Coach Tom about access to available training systems, including the DGIT Weekend Course Program and other development programs that can support your continued growth.</p><p class="solo-artwork-note">Access arrangements, availability, and any separate fees must be confirmed with Coach Tom. These programs are not promised as free or automatically included.</p></section>` : ''}
+      <section class="explore__program explore__section"><div><p class="explore__eyebrow">The program</p><h3>${p.closingTitle}</h3><p>${p.closing}</p><p class="solo-signature">DGIT — Dreams Grow In Time.</p></div><figure><button type="button" class="explore__graphic" aria-label="View original Solo promotional graphic"><img src="assets/images/solo_trainingprogram1.1.jfif" alt="Original Solo Training promotional artwork; see current package price below" width="2048" height="1716" loading="lazy"></button><figcaption>ORIGINAL SOLO ARTWORK</figcaption><p class="solo-artwork-note">Original promotional artwork is preserved. Current package terms: ${p.label}, ${money(p.price)}, court fee included. Older prices or inclusions printed on the graphic do not apply.</p></figure></section>
+      <section class="explore__finish explore__section"><p class="explore__eyebrow">${p.sessions} ${p.sessions===1?'SESSION':'SESSIONS'} · COURT FEE INCLUDED</p><h3>${money(p.price)}</h3><button type="button" class="explore__book">${p.bookLabel} <span aria-hidden="true">↗</span></button><p>Next: review your selected package, complete payment, then send your booking request for Coach Tommy’s review.</p></section>`;
+    scroll.scrollTop = 0;
+    scroll.querySelector('#explore-title').focus({preventScroll:true});
+    scroll.querySelector('[data-packages-back]').onclick = () => renderSoloPackages(id);
+    scroll.querySelector('.explore__book').onclick = () => close(true, id);
+    scroll.querySelector('.explore__graphic').onclick = () => {
+      const viewer = document.querySelector('#galleryLightbox');
+      viewer.querySelector('img').src = 'assets/images/solo_trainingprogram1.1.jfif';
+      viewer.querySelector('img').alt = 'Original Solo promotional graphic';
+      viewer.querySelector('p').textContent = `Original artwork. Current package: ${p.label} · ${money(p.price)} · Court fee included. Older printed terms do not apply.`;
+      viewer.showModal();
+    };
+    if (!reduced.matches && 'IntersectionObserver' in window) {
+      packageObserver = new IntersectionObserver(entries => entries.forEach(entry => {
+        if (entry.isIntersecting) { entry.target.classList.add('phase-in'); packageObserver.unobserve(entry.target); }
+      }), {root:scroll, threshold:.2});
+      scroll.querySelectorAll('.solo-framework li').forEach(li => packageObserver.observe(li));
+    }
   }
   // Keep Tab cycling inside the experience; the image viewer manages its own focus.
   dialog.addEventListener('keydown', event => {
