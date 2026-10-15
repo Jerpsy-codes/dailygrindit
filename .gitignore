@@ -1,0 +1,37 @@
+# OS/editor state
+.DS_Store
+._*
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Credentials and machine-specific configuration
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+.netlify/
+.codex/
+.agents/
+
+# Dependencies, caches and generated artifacts
+node_modules/
+__pycache__/
+*.py[cod]
+*.log
+*.tmp
+*.bak
+.cache/
+coverage/
+playwright-report/
+test-results/
+
+# Local prototype tooling and session reports (not website source)
+/tools/
+/LOCAL-PREVIEW.md
+/NETLIFY-PREVIEW.md

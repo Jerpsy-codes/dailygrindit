@@ -568,10 +568,10 @@ if (soloModal && soloOpenButtons.length) {
   const trainingPrograms = {
     "Solo Training": {
       note: "Solo Training is a one-on-one session with the coach.",
-      priceDisplay: "₱15,000 per student",
-      priceSubmission: "PHP 15,000 per student",
-      detailsDisplay: "10 sessions · Court fee: ₱150 per session · Free DGIT Merchandise (1 only)",
-      detailsSubmission: "10 sessions; Court fee: PHP 150 per session; Free DGIT Merchandise (1 only)",
+      priceDisplay: "₱17,000",
+      priceSubmission: "PHP 17,000",
+      detailsDisplay: "10 sessions · Court fee included",
+      detailsSubmission: "10 Sessions; 10 sessions; Court fee included",
       images: [
         {
           src: "assets/images/solo_trainingprogram1.1.jfif",
@@ -628,6 +628,13 @@ if (soloModal && soloOpenButtons.length) {
   let proofPreviewUrl = "";
   let selectedTrainingType = "Solo Training";
   let trainingImageIndex = 0;
+  let selectedSoloPackage = "";
+  const soloPackages = window.DGITSoloPackages;
+  const soloPackageSelect = soloModal.querySelector('[data-solo-package]');
+  const soloPackageGroup = soloModal.querySelector('[data-solo-package-group]');
+  const soloPackageName = soloModal.querySelector('[data-solo-package-name]');
+  const soloSessionCount = soloModal.querySelector('[data-solo-session-count]');
+  const soloArtworkNote = soloModal.querySelector('[data-solo-artwork-note]');
 
   const getSoloFocusable = () => {
     if (!soloPanel) return [];
@@ -751,16 +758,41 @@ if (soloModal && soloOpenButtons.length) {
   };
 
   const updateTrainingSummary = () => {
-    const program = trainingPrograms[selectedTrainingType];
-
-    if (!program) return;
+    const baseProgram = trainingPrograms[selectedTrainingType];
+    if (!baseProgram) return;
+    const isSolo = selectedTrainingType === "Solo Training";
+    const pkg = soloPackages[selectedSoloPackage];
+    const program = isSolo ? (pkg ? {
+      ...baseProgram,
+      priceDisplay: `₱${pkg.price.toLocaleString('en-PH')}`,
+      priceSubmission: `PHP ${pkg.price.toLocaleString('en-PH')}`,
+      detailsDisplay: `${pkg.sessions} ${pkg.sessions === 1 ? 'session' : 'sessions'} · Court fee included`,
+      detailsSubmission: `${pkg.name}; ${pkg.label}; ${pkg.sessions} ${pkg.sessions === 1 ? 'session' : 'sessions'}; Court fee included`
+    } : {
+      ...baseProgram,
+      priceDisplay: 'Choose a Solo package',
+      priceSubmission: '',
+      detailsDisplay: 'Select your package before paying. All Solo court fees are included.',
+      detailsSubmission: ''
+    }) : baseProgram;
+    soloPackageGroup.hidden = !isSolo;
+    soloPackageSelect.disabled = !isSolo;
+    soloPackageSelect.value = isSolo ? selectedSoloPackage : '';
+    soloPackageName.disabled = !isSolo || !pkg;
+    soloPackageName.value = isSolo && pkg ? `${pkg.name} — ${pkg.label}` : '';
+    soloSessionCount.disabled = !isSolo || !pkg;
+    soloSessionCount.value = isSolo && pkg ? String(pkg.sessions) : '';
+    soloArtworkNote.hidden = !isSolo;
+    if (isSolo) soloArtworkNote.textContent = pkg
+      ? `Original promotional graphics are preserved. Your current package is ${pkg.label}: ${program.priceDisplay}, court fee included. Older prices or inclusions printed on the graphics do not apply.`
+      : 'Original promotional graphics are preserved. Choose your package above for current prices; all Solo court fees are included. Older printed terms do not apply.';
 
     if (trainingNote) {
       trainingNote.textContent = program.note;
     }
 
     if (trainingSummary) {
-      trainingSummary.textContent = selectedTrainingType;
+      trainingSummary.textContent = isSolo && pkg ? `${selectedTrainingType} — ${pkg.label}` : selectedTrainingType;
     }
 
     if (trainingPrice) {
@@ -784,7 +816,7 @@ if (soloModal && soloOpenButtons.length) {
     }
 
     if (soloSubmitButton) {
-      const submitLabel = `Submit ${selectedTrainingType} Request`;
+      const submitLabel = `Submit ${selectedTrainingType}${isSolo && pkg ? ` — ${pkg.label}` : ""} Request`;
       soloSubmitButton.dataset.submitLabel = submitLabel;
 
       if (soloForm?.dataset.submitting !== "true") {
@@ -793,10 +825,11 @@ if (soloModal && soloOpenButtons.length) {
     }
   };
 
-  const setTrainingType = (trainingType) => {
+  const setTrainingType = (trainingType, packageId = selectedSoloPackage) => {
     if (!trainingPrograms[trainingType]) return;
 
     selectedTrainingType = trainingType;
+    if (trainingType === "Solo Training") selectedSoloPackage = Object.hasOwn(soloPackages, packageId) ? packageId : "";
     trainingImageIndex = 0;
 
     trainingTypeInputs.forEach((input) => {
@@ -890,12 +923,12 @@ if (soloModal && soloOpenButtons.length) {
     }
   }
 
-  const openSoloModal = (trigger) => {
+  const openSoloModal = (trigger, trainingType = trigger?.dataset.trainingTypeIntent, packageId = selectedSoloPackage) => {
     lastSoloTrigger = trigger || document.activeElement;
 
-    const intendedTrainingType = trigger?.dataset.trainingTypeIntent;
+    const intendedTrainingType = trainingType || "Solo Training";
     if (intendedTrainingType) {
-      setTrainingType(intendedTrainingType);
+      setTrainingType(intendedTrainingType, packageId);
     }
 
     soloModal.hidden = false;
@@ -908,6 +941,19 @@ if (soloModal && soloOpenButtons.length) {
       soloPanel.focus({ preventScroll: true });
     }
   };
+
+  // The Explore layer reuses the same opener and state synchronization as direct booking.
+  const selectSoloPackage = (packageId) => {
+    selectedSoloPackage = Object.hasOwn(soloPackages, packageId) ? packageId : '';
+    updateTrainingSummary();
+    if (soloStatus) soloStatus.textContent = '';
+  };
+  window.DGITBooking = Object.freeze({
+    open: openSoloModal,
+    selectSoloPackage,
+    get selectedSoloPackage() { return selectedSoloPackage; }
+  });
+  soloPackageSelect.addEventListener('change', () => selectSoloPackage(soloPackageSelect.value));
 
   soloOpenButtons.forEach((button) => {
     button.addEventListener("click", (event) => {

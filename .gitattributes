@@ -1,0 +1,7 @@
+# Keep document and media bytes intact; do not diff them as source text.
+*.pdf binary
+*.jpeg binary
+*.jpg binary
+*.jfif binary
+*.png binary
+*.mp4 binary
